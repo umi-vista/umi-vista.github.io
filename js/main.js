@@ -132,6 +132,65 @@
 
   checkHeroVideo();
 
+  const fallbackPlaybackVideos = [];
+
+  function prepareLoopingVideo(video) {
+    video.muted = true;
+    video.loop = true;
+    video.playsInline = true;
+  }
+
+  function videoIsVisible(video) {
+    const rect = video.getBoundingClientRect();
+    return (
+      rect.top < window.innerHeight &&
+      rect.bottom > 0 &&
+      rect.left < window.innerWidth &&
+      rect.right > 0
+    );
+  }
+
+  function updateLoopingVideo(video) {
+    if (videoIsVisible(video)) {
+      video.play().catch(() => {});
+    } else {
+      video.pause();
+    }
+  }
+
+  function observeLoopingVideo(video) {
+    if (!(video instanceof HTMLVideoElement)) return;
+    prepareLoopingVideo(video);
+    if ("IntersectionObserver" in window) {
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            const target = entry.target;
+            if (!(target instanceof HTMLVideoElement)) return;
+            if (entry.isIntersecting) {
+              target.play().catch(() => {});
+            } else {
+              target.pause();
+            }
+          });
+        },
+        { rootMargin: "0px", threshold: 0.15 }
+      );
+      observer.observe(video);
+    } else {
+      fallbackPlaybackVideos.push(video);
+      updateLoopingVideo(video);
+    }
+  }
+
+  function updateFallbackPlaybackVideos() {
+    fallbackPlaybackVideos.forEach(updateLoopingVideo);
+  }
+
+  if (heroVideo) {
+    observeLoopingVideo(heroVideo);
+  }
+
   /* ── View compare: hide placeholder when video has source ── */
   function checkViewCompareVideos() {
     document.querySelectorAll(".view-compare-media").forEach((wrap) => {
@@ -142,22 +201,15 @@
         (source?.getAttribute("src") && source.getAttribute("src") !== "");
       if (hasSrc && video) {
         wrap.classList.add("has-video");
-        video.muted = true;
-        video.loop = true;
-        video.playsInline = true;
-        video.play().catch(() => {});
+        observeLoopingVideo(video);
       }
     });
   }
 
   checkViewCompareVideos();
 
-  document.querySelectorAll(".physical-vali-video").forEach((video) => {
-    video.muted = true;
-    video.loop = true;
-    video.playsInline = true;
-    video.play().catch(() => {});
-  });
+  document.querySelectorAll(".physical-vali-video").forEach(observeLoopingVideo);
+  document.querySelectorAll(".task-deployment-video video").forEach(observeLoopingVideo);
 
   /* ── Smooth scroll offset for fixed header ── */
   document.querySelectorAll('a[href^="#"]').forEach((anchor) => {
@@ -189,7 +241,7 @@
   }
 
   function updatePreviewVideos() {
-    const margin = 360;
+    const margin = 0;
     previewVideos.forEach((video) => {
       video.muted = true;
       video.loop = true;
@@ -223,17 +275,22 @@
           }
         });
       },
-      { rootMargin: "360px 0px", threshold: 0.01 }
+      { rootMargin: "0px", threshold: 0.15 }
     );
 
     previewVideos.forEach((video) => videoObserver.observe(video));
   }
 
-  window.addEventListener("scroll", updatePreviewVideos, { passive: true });
-  window.addEventListener("resize", updatePreviewVideos);
-  window.addEventListener("load", updatePreviewVideos);
-  setTimeout(updatePreviewVideos, 300);
-  setTimeout(updatePreviewVideos, 1200);
+  function updateMediaOnViewportChange() {
+    updatePreviewVideos();
+    updateFallbackPlaybackVideos();
+  }
+
+  window.addEventListener("scroll", updateMediaOnViewportChange, { passive: true });
+  window.addEventListener("resize", updateMediaOnViewportChange);
+  window.addEventListener("load", updateMediaOnViewportChange);
+  setTimeout(updateMediaOnViewportChange, 300);
+  setTimeout(updateMediaOnViewportChange, 1200);
 
   function closeVideoModal() {
     if (!modal || !modalPlayer) return;
